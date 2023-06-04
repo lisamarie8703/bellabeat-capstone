@@ -1,0 +1,188 @@
+---
+title: "Capstone Project - Bellabeat"
+author: "Lisa Judge"
+date: "2023-05-24"
+output: 
+  rmarkdown::html_document:
+    theme: spacelab
+---
+
+## Introduction  
+This case study is to find trends in using smart devices, and how these trends can be used in the marketing strategy of Bellabeat's app and Leaf.  
+
+The data used came from the [FitBit Fitness Tracker Data] (https://www.kaggle.com/datasets/arashnic/fitbit) on Kaggle. The datasets focused on data from Fitbit users that consented to submitting their data, which included their physical activity and sleep activity. For this study, the minutes of physical and sleep activities were utilized as opposed to the steps, distances and heartrate data that was also provided. The prompt from the dataset on Kaggle said there were 30 participants over the 30 days, the data showed 33 unique ids that submitted data for the physical activities and only 24 unique ids for the sleep activities. This study only focuses on the 24 participants that submitted data for both the physical and sleep activities, from April 12, 2016 to May 12, 2016.
+
+## Process
+
+First thing is to install and load the packages that are used for the data analysis. 
+
+``` {r install packages}
+install.packages("tidyverse")
+library(tidyverse)
+```
+
+``` {r}
+install.packages("janitor")
+library(janitor)
+```
+
+``` {r additional libraries to load}
+library(dplyr)
+library(lubridate)
+library(readr)
+library(ggplot2)
+library(tidyr)
+```
+
+The next thing to do is to upload the data to clean and use during the data analysis. For this project I decided to use the daily activity merged dataset and sleep day merged dataset.
+
+``` {r upload daily activity data}
+activity_daily <- read.csv("dailyActivity_merged.csv")
+```
+
+``` {r upload sleep data}
+sleep_date <- read.csv("sleepDay_merged.csv")
+```
+
+The time stamp in the sleep data was unnecessary for this study. The following code is used to remove the time stamp, rename the column, and make a new column to show how long people were laying down in bed without sleeping.
+
+``` {r to remove the timestamp, rename the sleep date column and add a column}
+sleep_no_time <- separate(sleep_date, SleepDay, into = c('sleep_date', NA, NA), sep = ' ') %>% 
+  rename(activity_date = sleep_date) %>% 
+  mutate(minutes_laying_down = TotalTimeInBed - TotalMinutesAsleep)
+
+head(sleep_no_time)
+```
+
+To make sure there are unique and consistent column names, run the following code. The columns that are going to be used for this data analysis for both the physical activity and sleep activity are also selected in the following code.
+
+``` {r cleaned tibbles for activity minutes and sleep minutes}
+activity <- clean_names(activity_daily) %>% 
+  select(id, activity_date, total_steps, very_active_minutes, fairly_active_minutes, lightly_active_minutes, sedentary_minutes)
+  
+head(activity)
+```
+
+``` {r}
+sleep <- clean_names(sleep_no_time) %>% 
+  select(id, activity_date, total_minutes_asleep, total_time_in_bed, minutes_laying_down)
+  
+head(sleep)
+```
+
+To get a quick overview of the new tibble that has been created, the glimpse function is used. The column names, number of rows, and number of columns will be shown.
+
+```{r}
+glimpse(activity)
+```
+
+```{r}
+glimpse(sleep)
+```
+
+Knowing how many users supplied data for each of the datasets is important knowledge for this study.This code shows the number of participants in each of the datasets.
+
+``` {r view the distinct users}
+n_distinct(activity$id)
+n_distinct(sleep$id)
+```
+
+Now we know there were 33 users that gave daily activity data and 24 users that supplied daily sleep data. The next code combines the data for the 24 users that gave the data for both the sleep activity and physical activity, and only for the dates that had information for both. A column for the total activity minutes is added in this code as well.
+
+``` {r combine the sleep and activity tables by the user Ids}
+combined <- merge(sleep, activity, by = c("id", "activity_date")) %>% 
+  mutate(total_active_minutes = very_active_minutes + fairly_active_minutes + lightly_active_minutes + sedentary_minutes, active_minutes_not_sedentary = very_active_minutes + fairly_active_minutes + lightly_active_minutes) %>% 
+  mutate(across(activity_date, mdy)) %>% 
+  arrange(activity_date)
+  
+head(combined)
+```
+In order to graph averages of the total minutes asleep and total minutes doing activities, new tibbles need to be created with these figures calculated. 
+
+``` {r finding the averages by the date}
+averages_by_date <- group_by(combined, activity_date) %>% 
+  summarize(average_active_minutes = mean(total_active_minutes), average_sleep_minutes = mean(total_minutes_asleep), average_steps = mean(total_steps)) 
+
+head(averages_by_date)
+```
+
+``` {r finding the averages by id}
+averages_by_id <- group_by(combined, id) %>% 
+  summarize(average_active_minutes = mean(total_active_minutes), average_sleep_minutes = mean(total_minutes_asleep), average_steps = mean(total_steps))
+
+head(averages_by_id)
+```
+
+## Observations
+
+``` {r}
+ggplot(data = combined) +
+  geom_line(mapping = aes(x = activity_date, y = active_minutes_not_sedentary), color = "blue") +
+  facet_wrap(~id) +
+  labs(title = "Active Minutes of Each Participant", x = "Date", y = "Active Minutes") +
+  theme(axis.text.x = element_text(angle = 45))
+
+```
+
+With the graphs of the active minutes of each participant, it is easy to see that not everyone had data submitted for each date. Ids 2320127002 and 6775888955 did not submit very much data for the month long study. 9 other users did not submit data for each date, but were more consistent with their activity submissions.
+
+``` {r}
+ggplot(data = combined) +
+  geom_line(mapping = aes(x = activity_date, y = total_minutes_asleep), color = "blue") +
+  facet_wrap(~id) +
+  labs(title = "Minutes Asleep of Each Participant", x = "Date", y = "Minutes Asleep") +
+  theme(axis.text.x = element_text(angle = 45))
+ 
+```
+
+With the graphs of the minutes asleep of each participant, it is easy to see that not everyone had data submitted for each date. Ids 2320127002 and 6775888955 did not submit very much data for the month long study. 9 other users did not submit data for each date, but were more consistent with their sleep submissions.
+
+``` {r}
+ggplot(data = averages_by_id) +
+  geom_smooth(mapping = aes(x = id, y = average_active_minutes, color = "physically active")) +
+  geom_smooth(mapping = aes(x = id, y = average_sleep_minutes, color = "sleep")) +
+  labs(title = "Average of Sleep and Physically Active Minutes", subtitle = "Per User", y = "Average Minutes", colour = "Activity Type") 
+  
+```
+
+The trends of the average time of physical activities and sleep are what is expected, the more activity a person did, the less sleep and vise versa.
+
+``` {r}
+ggplot(data = averages_by_id) +
+  geom_point(mapping = aes(x = average_sleep_minutes, y = average_active_minutes)) +
+  geom_smooth(mapping = aes(x = average_sleep_minutes, y = average_active_minutes)) +
+  labs(title = "Trend of Sleep and Physical Activities Over The Month By Id", x = "Average Sleep Minutes", y = "Average Physical Active Minutes")
+
+```
+
+Over the month of collected data, the majority of the participants look to have similar sleep and physical activity.
+
+``` {r}
+ggplot(data = averages_by_date) +
+  geom_point(mapping = aes(x = average_sleep_minutes, y = average_active_minutes))  +
+  labs(title = "Trend of Sleep and Physical Activities Over The Month By Date", x = "Average Sleep Minutes", y = "Average Physically Active Minutes")
+
+```
+
+Over the month of collected data, the average minutes of physical activity and average minutes of sleep of the participants is rather consistent.
+
+``` {r}
+ggplot(data = averages_by_date) +
+  geom_line(mapping = aes(x = activity_date, y = average_steps)) +
+  labs(title = "Average Steps Each Day", x = "Date", y = "Average Steps")
+
+```
+
+Of the 24 participants, not everyone contributed data for the last few days of the data collection. 
+
+
+## Conclusion
+
+Based on the available data, of the 33 participants who submitted data, only 24 provided information for both physical activity and sleep. 11 of those participants did not submit data for each of the dates, with 2 of these participants only submitting data for a few dates. As expected, the trends of the average time of physical activity and sleep showed that the more activity a person did, the less sleep they got and vise versa. When looking at the trend of physical activity and sleep of the participants over the month, a majority of the people had similar minutes of physical activity and sleep. The average steps of the participants over the month varied each day, going up and down with no consistency.  
+
+There are limitations to the available data. The small sample set, over a small period of time only shows a small snapshot of how the people used their fitness trackers. The lack of consistent data for each of the participants could be due to charging and/or not wearing their fitness tracker. The outliers could have been located in areas with much warmer or colder weather conditions, as well as any illnesses or life events that would have prevented the participants from wearing the fitness tracker or being active. If there were more participants, over a longer period of time, there would be more accurate results.  
+
+Since the Bellabeat Leaf and app are marketed to women, I would find the gender demographics of the participants as an added data point to make better marketing recommendations. Other data that would be useful for making more accurate recommendations would be: age demographics, charging times (both how long and the time of day), reasons for not wearing the fitness tracker, and more current data, specifically post-Covid 19 lockdowns. The additional data observations would provide a more accurate picture of the people who use fitness trackers and how they use their devices. This would provide better information for better marketing techniques for both the Bellabeat app and the Leaf. The more complete picture of the users would allow Bellabeat to market the features of the app and leaf that are missing from current other fitness trackers. For example, if the lack of sleep data is due to charging, the feature of the Leaf not needing a charge would be highlighted in the marketing. The age demographics would be useful in continuing to target the right advertising platforms. Much of people's lives have changed since the Covid 19 lockdowns, more current data would provide the new ways people are being active.  
+
+The Bellabeat Leaf already provides women a fashionable way to track their activity, stress, reproductive health, and sleep without the distractions of displays or need to charge the device. The Bellabeat app provides the data and information that is useful for target goals and getting a more complete view on health. It focuses more on mental and physical health being a fluid target rather than a fixed number to achieve everyday. Based on the data in this study, the lack of consistent data could be attributed to the need to take off the device to charge it. The marketing campaign should highlight the Leaf as a product that only needs to have a battery replaced every 6 months.
+
