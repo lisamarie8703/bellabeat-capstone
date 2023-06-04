@@ -2,9 +2,7 @@
 title: "Capstone Project - Bellabeat"
 author: "Lisa Judge"
 date: "2023-05-24"
-output: 
-  rmarkdown::html_document:
-    theme: spacelab
+output: html_document
 ---
 
 ## Introduction  
